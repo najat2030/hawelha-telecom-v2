@@ -285,16 +285,29 @@
                 // تجميع النص من العناصر
                 let fullText = textContent.items.map(item => item.str).join(' ');
                 
-                // البحث عن أرقام الهواتف
-                const phoneRegex = /01[0125]\d{8}/g;
-                const phones = [...fullText.matchAll(phoneRegex)].map(m => m[0]);
+                // تحويل الأرقام العربية إلى إنجليزية
+                function normalizeDigits(str) {
+                    return str
+                        .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
+                        .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+                }
+
+                const normalizedText = normalizeDigits(fullText);
+
+                // استخراج أرقام المحمول الموجودة بجوار كلمة "محمول" فقط
+                const phoneRegex = /محمول[\s\S]{0,40}?(01[0125]\d{8})/g;
+                let phones = [];
+                let match;
+                while ((match = phoneRegex.exec(normalizedText)) !== null) {
+                    phones.push(match[1]);
+                }
                 
                 for (const phone of phones) {
                     // 🔑 الفلتر الذكي: إذا كان الرقم موجود مسبقاً، تخطاه فوراً
                     if (processedPhones.has(phone)) continue;
                     
-                    const idx = fullText.indexOf(phone);
-                    const context = fullText.substring(Math.max(0, idx - 50), idx + 300);
+                    const idx = normalizedText.indexOf(phone);
+                    const context = normalizedText.substring(Math.max(0, idx - 50), idx + 300);
                     
                     let vals = extractNumbers(context);
                     
