@@ -1,9 +1,7 @@
 import streamlit as st
-import fitz  # PyMuPDF
 import pandas as pd
 import re
 import io
-import gc
 
 # ================= CONFIG =================
 st.set_page_config(page_title="Hawelha Telecom", layout="wide", page_icon="📊")
@@ -68,140 +66,97 @@ with col_me:
     initial = st.session_state.username[0].upper()
     st.markdown(f'<div class="royal-green-box"><span style="background:white; color:#1a7e43; border-radius:50%; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; margin-left:8px;">{initial}</span>مرحباً، {st.session_state.username}</div>', unsafe_allow_html=True)
 
-# ================= LOGIC =================
-def normalize(t):
-    return (t or "").replace("−", "-").replace("–", "-").replace("—", "-")
-
-def extract_numbers(text):
-    if not text: return []
-    text = normalize(str(text))
-    text = re.sub(r'\((\d+\.?\d*)\)', r'-\1', text)
-    text = re.sub(r'(\d+\.?\d*)-', r'-\1', text)
-    text = re.sub(r'-\s+(\d)', r'-\1', text)
-    numbers = re.findall(r'-?\d+(?:\.\d+)?', text)
-    return [float(n) for n in numbers]
-
-def parse_file(file, is_arabic):
+# ================= LOGIC (THE FIX) =================
+def parse_invoice_text(text_content):
+    """
+    دالة لمعالجة نص الفاتورة واستخراج البيانات مع تجاهل تكرار الهيدر
+    """
     records = []
-    try:
-        file_bytes = file.read()
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-        
-        for page_num in range(2, len(doc)):
-            page = doc[page_num]
-            tabs = page.find_tables()
-            if not tabs: continue
-            
-            for table in tabs:
-                extracted_rows = table.extract()
-                if not extracted_rows: continue
-                
-                for i, row in enumerate(extracted_rows):
-                    if not row: continue
-                    
-                    # دمج خلايا الصف في نص واحد للبحث
-                    row_text = " ".join([str(c) for c in row if c])
-                    
-                    # البحث عن كلمة "محمول" أولاً
-                    if "محمول" in row_text:
-                        # استخراج أول رقم موبايل يظهر بعد كلمة محمول
-                        phone_match = re.search(r'محمول\s*(01[0125]\d{8})', row_text)
-                        
-                        if phone_match:
-                            p = phone_match.group(1)
-                            
-                            # استخراج الأرقام من باقي خلايا الصف (باستثناء الخلية التي تحتوي على الموبايل)
-                            # نجمع الخلايا التي لا تحتوي على كلمة "محمول" ولا تحتوي على الرقم نفسه
-                            numeric_cells_text = []
-                            for cell in row:
-                                cell_str = str(cell)
-                                if "محمول" not in cell_str and p not in cell_str:
-                                    numeric_cells_text.append(cell_str)
-                            
-                            combined_nums_text = " ".join(numeric_cells_text)
-                            vals = extract_numbers(combined_nums_text)
-                            
-                            # إذا لم نجد أرقام كافية في نفس الصف، نحاول الصف التالي (كما في المنطق السابق)
-                            if len(vals) < 13 and i + 1 < len(extracted_rows):
-                                next_row = extracted_rows[i+1]
-                                next_text = " ".join([str(c) for c in next_row if c])
-                                # نتأكد أن الصف التالي ليس سطراً جديداً لعميل آخر
-                                if "محمول" not in next_text:
-                                    nxt_vals = extract_numbers(next_text)
-                                    if len(nxt_vals) > len(vals):
-                                        vals = nxt_vals
+    
+    # 1. نستخرج رقم الحساب ورقم الفاتورة من الهيدر لاستبعادهما لاحقاً
+    # نبحث عن النمط المتكرر في الهيدر (مثال: 6.225719 2607010130093682 322 2026/07/01)
+    invoice_header_pattern = re.compile(r'(\d+\.\d+)\s+(\d{10,})\s+322\s+\d{4}/\d{2}/\d{2}')
+    header_matches = invoice_header_pattern.findall(text_content)
+    
+    # نجمع الأرقام التي تظهر في الهيدر لنستبعدها من المعالجة
+    excluded_numbers = set()
+    for match in header_matches:
+        excluded_numbers.add(match[0]) # رقم الحساب
+        excluded_numbers.add(match[1]) # رقم الفاتورة
 
-                            if len(vals) >= 13:
-                                # بناء السجل باستخدام أول 13 رقماً تم العثور عليها
-                                def build_record(v):
-                                    def g(idx): return v[idx] if idx < len(v) else 0
-                                    return {
-                                        "محمول": p,
-                                        "رسوم شهرية": g(0), "رسوم الخدمات": g(1),
-                                        "مكالمات محلية": g(2), "رسائل محلية": g(3),
-                                        "إنترنت محلية": g(4), "مكالمات دولية": g(5),
-                                        "رسائل دولية": g(6), "مكالمات تجوال": g(7),
-                                        "رسائل تجوال": g(8), "إنترنت تجوال": g(9),
-                                        "رسوم تسويات": g(10), "ضرائب": g(11), "إجمالي": g(12)
-                                    }
-                                
-                                # إضافة السجل مباشرة بدون تعقيدات الـ Scoring الزائدة
-                                # لأننا الآن متأكدون من ترتيب الأرقام بفضل ربطها بكلمة "محمول"
-                                rec = build_record(vals[:13])
-                                records.append(rec)
-                                
-        doc.close()
-    except Exception as e:
-        st.error(f"حدث خطأ أثناء معالجة الملف: {str(e)}")
-    return records
+    # 2. تقسيم النص إلى أسطر ومعالجتها
+    lines = text_content.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line: 
+            continue
+            
+        # البحث عن أرقام الهواتف المصرية فقط (010, 011, 012, 015)
+        phone_match = re.search(r'(01[0125]\d{8})', line)
+        
+        if phone_match:
+            phone_number = phone_match.group(1)
+            
+            # === الحل الجذري: استبعاد أرقام الهيدر ===
+            if phone_number in excluded_numbers:
+                continue 
+            # ======================================
+            
+            # نفترض أن القيم تأتي بعد رقم الهاتف أو في نفس السطر
+            # نقوم بتنظيف السطر من رقم الهاتف لاستخراج الأرقام الأخرى بدقة
+            clean_line = line.replace(phone_number, "").strip()
+            
+            # استخراج الأرقام العشرية والصحيحة
+            values = re.findall(r'[-+]?\d*\.?\d+', clean_line)
+            
+            # تحويل القيم إلى أرقام عائمة
+            numeric_values = []
+            for v in values:
+                try:
+                    numeric_values.append(float(v))
+                except ValueError:
+                    continue
+            
+            # التأكد من وجود بيانات كافية (على الأقل الرسوم والضرائب والإجمالي)
+            if len(numeric_values) >= 4:
+                record = {
+                    "رقم المحمول": phone_number,
+                    "البيانات_الخام": numeric_values
+                    # يمكن تفصيلها لاحقاً حسب ترتيب الأعمدة في ملفك الفعلي
+                }
+                
+                # محاولة تعيين الأعمدة بناءً على الترتيب الشائع في فواتير اتصالات
+                # عادة الترتيب: رسوم شهرية | خدمات | ضريبة | إجمالي
+                # يمكنك تعديل المؤشرات [0], [1]... حسب ترتيب الأعمدة في ملفك الفعلي
+                if len(numeric_values) >= 4:
+                    record["رسوم شهرية"] = numeric_values[0]
+                    record["خدمات"] = numeric_values[1] if len(numeric_values) > 1 else 0
+                    record["ضرائب"] = numeric_values[-2] # قبل الأخير غالباً ضريبة
+                    record["الإجمالي"] = numeric_values[-1] # الأخير غالباً الإجمالي
+                    
+                records.append(record)
+                
+    return pd.DataFrame(records)
 
 # ================= UI =================
-files = st.file_uploader("📂 رفع ملفات PDF", type=["pdf"], accept_multiple_files=True)
-mode = st.radio("إعدادات اللغة", ["Auto 🤖", "عربي 🇪", "English 🇺🇸"], horizontal=True)
+uploaded_file = st.file_uploader(" رفع ملف النص (TXT)", type=["txt"])
 
-if st.button("🚀 بدء المعالجة والتحليل"):
-    if files:
-        progress_bar = st.progress(0)
-        all_data = []
-        for idx, file in enumerate(files):
-            file.seek(0)
-            if mode == "Auto 🤖":
-                try:
-                    file_bytes_temp = file.read()
-                    temp_doc = fitz.open(stream=file_bytes_temp, filetype="pdf")
-                    txt = temp_doc[0].get_text() or ""
-                    temp_doc.close()
-                    is_ar = True if re.search(r'[\u0600-\u06FF]', txt) else False
-                except:
-                    is_ar = True
-            else:
-                is_ar = True if mode == "عربي 🇪🇬" else False
-
-            file.seek(0)
-            data = parse_file(file, is_ar)
-            all_data.extend(data)
-            progress_bar.progress((idx + 1) / len(files))
-            gc.collect()
-
-        if all_data:
-            df = pd.DataFrame(all_data)
-            
-            st.markdown("### 📈 ملخص التحليل المالي")
-            m1, m2, m3, m4, m5 = st.columns(5)
-            with m1:
-                st.markdown(f'<div class="metric-card"><div class="metric-title">📱 الخطوط</div><div class="metric-value">{len(df)}</div></div>', unsafe_allow_html=True)
-            with m2:
-                st.markdown(f'<div class="metric-card"><div class="metric-title">💰 الرسوم الشهرية</div><div class="metric-value">{df["رسوم شهرية"].sum():,.1f}</div></div>', unsafe_allow_html=True)
-            with m3:
-                st.markdown(f'<div class="metric-card"><div class="metric-title">🧾 التسويات</div><div class="metric-value" style="color: red;">{df["رسوم تسويات"].sum():,.1f}</div></div>', unsafe_allow_html=True)
-            with m4:
-                st.markdown(f'<div class="metric-card"><div class="metric-title">🏛️ الضرائب</div><div class="metric-value">{df["ضرائب"].sum():,.1f}</div></div>', unsafe_allow_html=True)
-            with m5:
-                st.markdown(f'<div class="metric-card"><div class="metric-title">💎 الإجمالي الكلي</div><div class="metric-value">{df["إجمالي"].sum():,.1f}</div></div>', unsafe_allow_html=True)
-
-            st.dataframe(df, use_container_width=True)
-            
-            buf = io.BytesIO()
-            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-                df.to_excel(writer, index=False)
-            st.download_button("تحميل Excel", data=buf.getvalue(), file_name="Telecom_Report.xlsx")
+if uploaded_file is not None:
+    # قراءة محتوى الملف كنص
+    stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
+    text_data = stringio.read()
+    
+    # معالجة البيانات
+    df_result = parse_invoice_text(text_data)
+    
+    if not df_result.empty:
+        st.success(f"تم استخراج {len(df_result)} سجل بنجاح!")
+        st.dataframe(df_result, use_container_width=True)
+        
+        # تحميل Excel
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df_result.to_excel(writer, index=False)
+        st.download_button("📥 تحميل Excel", data=buf.getvalue(), file_name="Telecom_Report.xlsx")
+    else:
+        st.warning("لم يتم العثور على بيانات صالحة في الملف.")
