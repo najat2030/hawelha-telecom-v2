@@ -88,7 +88,7 @@
             <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
                 <div class="upload-icon">📂</div>
                 <h3>اضغط هنا لرفع ملفات PDF</h3>
-                <p style="color: #777;">يدعم رفع ملفات متعددة مع منع التكرار تلقائياً</p>
+                <p style="color: #777;">يدعم رفع ملفات متعددة</p>
                 <input type="file" id="fileInput" multiple accept=".pdf" class="hidden" onchange="processFiles(this.files)">
             </div>
 
@@ -145,8 +145,6 @@
         };
 
         let globalData = [];
-        // فلتر لمنع تكرار الأرقام (السر في حل مشكلة التكرار)
-        const processedPhones = new Set(); 
 
         // ================= دوال تسجيل الدخول =================
         function handleLogin() {
@@ -181,11 +179,13 @@
             location.reload();
         }
 
-        // ================= منطق استخراج البيانات =================
+        // ================= منطق استخراج البيانات (نفس خوارزمية Python) =================
         
+        // دالة تطبيع النصوص واستخراج الأرقام
         function extractNumbers(text) {
             if (!text) return [];
             let normalized = text.replace(/−/g, "-").replace(/–/g, "-").replace(/—/g, "-");
+            // معالجة الأقواس والأرقام السالبة كما في كود بايثون
             normalized = normalized.replace(/\((\d+\.?\d*)\)/g, '-$1');
             normalized = normalized.replace(/(\d+\.?\d*)-/g, '-$1');
             normalized = normalized.replace(/-\s+(\d)/g, '-$1');
@@ -194,6 +194,7 @@
             return matches ? matches.map(n => parseFloat(n)) : [];
         }
 
+        // دالة بناء السجل
         function buildRecord(vals, phone) {
             const g = (idx) => idx < vals.length ? vals[idx] : 0;
             return {
@@ -207,6 +208,7 @@
             };
         }
 
+        // دالة التقييم (Scoring Algorithm) - نفس منطق بايثون بالضبط
         function scoreRecord(rec) {
             let score = 0;
             const totalCalc = rec["رسوم شهرية"] + rec["رسوم الخدمات"] + rec["مكالمات محلية"] + 
@@ -245,8 +247,8 @@
             progressArea.style.display = 'block';
             document.getElementById('resultsArea').classList.add('hidden');
             globalData = [];
-            processedPhones.clear(); // تفريغ الفلتر عند بدء معالجة جديدة
             
+            // تحميل مكتبة PDF.js ديناميكياً إذا لم تكن محملة
             if (typeof pdfjsLib === 'undefined') {
                 const script = document.createElement('script');
                 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
@@ -268,7 +270,7 @@
             }
             
             progressFill.style.width = '100%';
-            statusText.innerText = `تمت المعالجة بنجاح! تم استخراج ${globalData.length} خط فريد ✅`;
+            statusText.innerText = 'تمت المعالجة بنجاح! ✅';
             renderResults();
         }
 
@@ -285,32 +287,18 @@
                 // تجميع النص من العناصر
                 let fullText = textContent.items.map(item => item.str).join(' ');
                 
-                // تحويل الأرقام العربية إلى إنجليزية
-                function normalizeDigits(str) {
-                    return str
-                        .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
-                        .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
-                }
-
-                const normalizedText = normalizeDigits(fullText);
-
-                // استخراج أرقام المحمول الموجودة بجوار كلمة "محمول" فقط
-                const phoneRegex = /محمول[\s\S]{0,40}?(01[0125]\d{8})/g;
-                let phones = [];
-                let match;
-                while ((match = phoneRegex.exec(normalizedText)) !== null) {
-                    phones.push(match[1]);
-                }
+                // البحث عن أرقام الهواتف (010, 011, 012, 015)
+                const phoneRegex = /01[0125]\d{8}/g;
+                const phones = [...fullText.matchAll(phoneRegex)].map(m => m[0]);
                 
                 for (const phone of phones) {
-                    // 🔑 الفلتر الذكي: إذا كان الرقم موجود مسبقاً، تخطاه فوراً
-                    if (processedPhones.has(phone)) continue;
-                    
-                    const idx = normalizedText.indexOf(phone);
-                    const context = normalizedText.substring(Math.max(0, idx - 50), idx + 300);
+                    // نجد موقع الهاتف ونأخذ جزء من النص حوله لاستخراج الأرقام المجاورة
+                    const idx = fullText.indexOf(phone);
+                    const context = fullText.substring(Math.max(0, idx - 50), idx + 300);
                     
                     let vals = extractNumbers(context);
                     
+                    // استبعاد رقم الهاتف نفسه من قائمة القيم الرقمية
                     const phoneNum = parseInt(phone);
                     vals = vals.filter(v => {
                         const vInt = parseInt(v);
@@ -319,6 +307,7 @@
 
                     if (vals.length < 13) continue;
 
+                    // تطبيق خوارزمية التقييم (Scoring) على النوافذ المنزلقة
                     let candidates = [];
                     for (let start = 0; start <= vals.length - 13; start++) {
                         const window = vals.slice(start, start + 13);
@@ -331,10 +320,9 @@
                         candidates.push({ score: scoreRecord(reversedRec), record: reversedRec });
                     }
 
+                    // اختيار أفضل سجل بناءً على أعلى سكور
                     candidates.sort((a, b) => b.score - a.score);
                     if (candidates.length > 0 && candidates[0].score > 0) {
-                        // إضافة الرقم للفلتر بعد التأكد من صحة بياناته
-                        processedPhones.add(phone);
                         records.push(candidates[0].record);
                     }
                 }
