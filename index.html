@@ -288,55 +288,83 @@
                 // تحويل الأرقام العربية إلى إنجليزية
                 function normalizeDigits(str) {
                     return str
-                        .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
-                        .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+                        .replace(/[٠-٩]/g, d => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
+                        .replace(/[۰-۹]/g, d => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)]);
                 }
 
                 const normalizedText = normalizeDigits(fullText);
 
                 // استخراج أرقام المحمول الموجودة بجوار كلمة "محمول" فقط
-                const phoneRegex = /محمول[\s\S]{0,40}?(01[0125]\d{8})/g;
-                let phones = [];
+                const phoneRegex = /^محمول\s+(01[0125]\d{8})/gm;
                 let match;
                 while ((match = phoneRegex.exec(normalizedText)) !== null) {
-                    phones.push(match[1]);
-                }
-                
-                for (const phone of phones) {
-                    // 🔑 الفلتر الذكي: إذا كان الرقم موجود مسبقاً، تخطاه فوراً
-                    if (processedPhones.has(phone)) continue;
-                    
-                    const idx = normalizedText.indexOf(phone);
-                    const context = normalizedText.substring(Math.max(0, idx - 50), idx + 300);
-                    
+
+                    const phone = match[1];
+
+                    if (processedPhones.has(phone))
+                        continue;
+
+                    const idx = match.index;
+
+                    const context = normalizedText.substring(
+                        idx,
+                        Math.min(normalizedText.length, idx + 500)
+                    );
+
                     let vals = extractNumbers(context);
-                    
-                    const phoneNum = parseInt(phone);
+
                     vals = vals.filter(v => {
-                        const vInt = parseInt(v);
-                        return !(vInt === phoneNum || String(vInt) === phone);
+
+                        const s = String(Math.trunc(v));
+
+                        return s !== phone;
+
                     });
 
-                    if (vals.length < 13) continue;
+                    if (vals.length < 13)
+                        continue;
 
-                    let candidates = [];
+                    let best = null;
+                    let bestScore = -1;
+
                     for (let start = 0; start <= vals.length - 13; start++) {
-                        const window = vals.slice(start, start + 13);
-                        
-                        const normalRec = buildRecord(window, phone);
-                        const reversedWindow = [...window].reverse();
-                        const reversedRec = buildRecord(reversedWindow, phone);
 
-                        candidates.push({ score: scoreRecord(normalRec), record: normalRec });
-                        candidates.push({ score: scoreRecord(reversedRec), record: reversedRec });
+                        const win = vals.slice(start, start + 13);
+
+                        const rec = buildRecord(win, phone);
+
+                        const rev = buildRecord([...win].reverse(), phone);
+
+                        const s1 = scoreRecord(rec);
+
+                        const s2 = scoreRecord(rev);
+
+                        if (s1 > bestScore) {
+
+                            bestScore = s1;
+
+                            best = rec;
+
+                        }
+
+                        if (s2 > bestScore) {
+
+                            bestScore = s2;
+
+                            best = rev;
+
+                        }
+
                     }
 
-                    candidates.sort((a, b) => b.score - a.score);
-                    if (candidates.length > 0 && candidates[0].score > 0) {
-                        // إضافة الرقم للفلتر بعد التأكد من صحة بياناته
+                    if (best && bestScore > 0) {
+
                         processedPhones.add(phone);
-                        records.push(candidates[0].record);
+
+                        records.push(best);
+
                     }
+
                 }
             }
             return records;
