@@ -294,12 +294,13 @@
 
                 const normalizedText = normalizeDigits(fullText);
 
-                // استخراج أرقام المحمول الموجودة بجوار كلمة "محمول" فقط
-                const phoneRegex = /^محمول\s+(01[0125]\d{8})/gm;
+                // استخراج أرقام المحمول المجاور لـ "محمول" بمرونة تامة (سواء قبلها أو بعدها)
+                const phoneRegex = /(?:محمول[\s|]*)(01[0125]\d{8})|(01[0125]\d{8})(?:[\s|]*محمول)/g;
                 let match;
+                
                 while ((match = phoneRegex.exec(normalizedText)) !== null) {
 
-                    const phone = match[1];
+                    const phone = match[1] || match[2];
 
                     if (processedPhones.has(phone))
                         continue;
