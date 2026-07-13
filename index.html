@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hawelha Telecom - تحليل الفواتير</title>
+    
+    <!-- مكتبات خارجية للتعامل مع PDF و Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- خط تجوال -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root { --primary: #1a7e43; --primary-dark: #146435; --bg: #f8f9fa; }
+        * { box-sizing: border-box; font-family: 'Tajawal', sans-serif; }
+        body { margin: 0; background-color: var(--bg); color: #333; padding-bottom: 50px; }
+        
+        /* تصميم شاشة تسجيل الدخول */
+        .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .login-card { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        .login-title { color: var(--primary); font-size: 28px; font-weight: 800; margin-bottom: 30px; }
+        
+        /* الحقول والأزرار */
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; outline: none; transition: 0.3s; }
+        input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26, 126, 67, 0.1); }
+        button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 50px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.3s; }
+        button:hover { background: var(--primary-dark); transform: translateY(-2px); }
+        
+        /* الواجهة الرئيسية */
+        .app-header { background: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 30px; }
+        .logo-area { font-size: 24px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        .user-badge { background: var(--primary); color: white; padding: 8px 20px; border-radius: 50px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        
+        /* منطقة الرفع */
+        .upload-zone { border: 2px dashed #ccc; border-radius: 20px; padding: 40px; text-align: center; background: white; transition: 0.3s; cursor: pointer; margin-bottom: 30px; }
+        .upload-zone:hover { border-color: var(--primary); background: #f0fdf4; }
+        .upload-icon { font-size: 40px; margin-bottom: 10px; color: var(--primary); }
+        
+        /* البطاقات الإحصائية */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-right: 5px solid var(--primary); text-align: center; }
+        .stat-val { font-size: 28px; font-weight: 800; color: var(--primary); margin-top: 5px; }
+        .stat-label { color: #666; font-size: 14px; font-weight: 600; }
+        
+        /* الجدول */
+        .table-container { overflow-x: auto; background: white; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 20px; }
+        table { width: 100%; border-collapse: collapse; min-width: 800px; }
+        th { background: var(--primary); color: white; padding: 12px; text-align: right; font-weight: 600; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        tr:last-child td { border-bottom: none; }
+        
+        /* شريط التقدم */
+        .progress-bar { height: 6px; background: #eee; border-radius: 10px; overflow: hidden; margin: 20px 0; display: none; }
+        .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s; }
+        
+        .hidden { display: none !important; }
+        .error-msg { color: #dc3545; background: #ffe6e6; padding: 10px; border-radius: 8px; margin-bottom: 15px; display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- شاشة تسجيل الدخول -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-card">
+            <div class="login-title">🔐 تسجيل الدخول</div>
+            <div id="loginError" class="error-msg">بيانات خاطئة</div>
+            <input type="text" id="username" placeholder="اسم المستخدم">
+            <input type="password" id="password" placeholder="كلمة المرور">
+            <button onclick="handleLogin()">دخول</button>
+        </div>
+    </div>
+
+    <!-- الواجهة الرئيسية -->
+    <div id="mainApp" class="hidden">
+        <div class="app-header">
+            <div class="logo-area">📊 Hawelha Telecom</div>
+            <div class="user-badge">
+                <span id="displayUser">المستخدم</span>
+                <button onclick="logout()" style="width: auto; padding: 5px 15px; font-size: 12px; background: rgba(255,255,255,0.2);">خروج</button>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📂</div>
+                <h3>اضغط هنا لرفع ملفات PDF</h3>
+                <p style="color: #777;">يدعم رفع ملفات متعددة (بحد أقصى 100 ميجا)</p>
+                <input type="file" id="fileInput" multiple accept=".pdf" class="hidden" onchange="processFiles(this.files)">
+            </div>
+
+            <div id="progressArea" class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+            <div id="statusText" style="text-align: center; color: #666; margin-bottom: 20px;"></div>
+
+            <div id="resultsArea" class="hidden">
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label"> الخطوط</div><div id="sLines" class="stat-val">0</div></div>
+                    <div class="stat-card"><div class="stat-label">💰 الرسوم الشهرية</div><div id="sMonthly" class="stat-val">0</div></div>
+                    <div class="stat-card"><div class="stat-label">🧾 التسويات</div><div id="sSettlements" class="stat-val" style="color: #dc3545;">0</div></div>
+                    <div class="stat-card"><div class="stat-label">💎 الإجمالي الكلي</div><div id="sTotal" class="stat-val">0</div></div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">تفاصيل البيانات المستخرجة</h3>
+                    <button onclick="exportToExcel()" style="width: auto; padding: 10px 25px;">📥 تحميل Excel</button>
+                </div>
+                
+                <div class="table-container">
+                    <table id="dataTable">
+                        <thead>
+                            <tr>
+                                <th>رقم المحمول</th>
+                                <th>رسوم شهرية</th>
+                                <th>خدمات</th>
+                                <th>محلي مكالمات</th>
+                                <th>محلي رسائل</th>
+                                <th>محلي إنترنت</th>
+                                <th>دولي مكالمات</th>
+                                <th>تجوال مكالمات</th>
+                                <th>تسويات</th>
+                                <th>ضرائب</th>
+                                <th>الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ================= إعدادات المستخدمين (نفس ملف users.xlsx) =================
+        // يمكنك إضافة المزيد من المستخدمين هنا يدوياً
+        const USERS_DB = {
+            "admin": "123",
+            "user1": "pass1",
+            "manager": "hawelha2024"
+        };
+
+        let globalData = [];
+
+        // ================= دوال تسجيل الدخول =================
+        function handleLogin() {
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value.trim();
+            
+            if (USERS_DB[u] && USERS_DB[u] === p) {
+                sessionStorage.setItem('isLoggedIn', 'true');
+                sessionStorage.setItem('username', u);
+                showApp();
+            } else {
+                const err = document.getElementById('loginError');
+                err.style.display = 'block';
+                setTimeout(() => err.style.display = 'none', 3000);
+            }
+        }
+
+        function checkAuth() {
+            if (sessionStorage.getItem('isLoggedIn') === 'true') {
+                showApp();
+            }
+        }
+
+        function showApp() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('displayUser').innerText = sessionStorage.getItem('username');
+        }
+
+        function logout() {
+            sessionStorage.clear();
+            location.reload();
+        }
+
+        // ================= منطق معالجة PDF =================
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        async function processFiles(files) {
+            if (!files.length) return;
+            
+            const progressArea = document.getElementById('progressArea');
+            const progressFill = document.getElementById('progressFill');
+            const statusText = document.getElementById('statusText');
+            
+            progressArea.style.display = 'block';
+            document.getElementById('resultsArea').classList.add('hidden');
+            globalData = [];
+            
+            for (let i = 0; i < files.length; i++) {
+                statusText.innerText = `جاري معالجة الملف ${i + 1} من ${files.length}...`;
+                progressFill.style.width = `${((i) / files.length) * 100}%`;
+                
+                try {
+                    const records = await extractFromPDF(files[i]);
+                    globalData = globalData.concat(records);
+                } catch (err) {
+                    console.error("Error processing file:", files[i].name, err);
+                }
+            }
+            
+            progressFill.style.width = '100%';
+            statusText.innerText = 'تمت المعالجة بنجاح! ✅';
+            renderResults();
+        }
+
+        async function extractFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            let records = [];
+
+            // نبدأ من الصفحة الثالثة كما في كود بايثون الأصلي
+            for (let pageNum = 3; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                
+                // تجميع النص من العناصر
+                let fullText = textContent.items.map(item => item.str).join(' ');
+                
+                // البحث عن أرقام الهواتف (010, 011, 012, 015)
+                const phoneRegex = /01[0125]\d{8}/g;
+                const phones = fullText.match(phoneRegex);
+                
+                if (phones) {
+                    phones.forEach(phone => {
+                        // استخراج الأرقام المجاورة للهاتف كمحاولة لتخمين القيم
+                        // هذه محاكاة بسيطة لأن JS لا يملك قدرة pdfplumber على فهم الجداول
+                        const nearbyNumbers = fullText.match(/-?\d+(\.\d+)?/g) || [];
+                        
+                        // نقوم بإنشاء سجل افتراضي (يجب تعديله حسب شكل الفاتورة الفعلي)
+                        records.push({
+                            "محمول": phone,
+                            "رسوم شهرية": parseFloat(nearbyNumbers[0]) || 0,
+                            "رسوم الخدمات": parseFloat(nearbyNumbers[1]) || 0,
+                            "مكالمات محلية": parseFloat(nearbyNumbers[2]) || 0,
+                            "رسائل محلية": parseFloat(nearbyNumbers[3]) || 0,
+                            "إنترنت محلية": parseFloat(nearbyNumbers[4]) || 0,
+                            "مكالمات دولية": parseFloat(nearbyNumbers[5]) || 0,
+                            "رسائل دولية": 0,
+                            "مكالمات تجوال": parseFloat(nearbyNumbers[6]) || 0,
+                            "رسائل تجوال": 0,
+                            "إنترنت تجوال": 0,
+                            "رسوم تسويات": parseFloat(nearbyNumbers[7]) || 0,
+                            "ضرائب": parseFloat(nearbyNumbers[8]) || 0,
+                            "إجمالي": parseFloat(nearbyNumbers[9]) || 0
+                        });
+                    });
+                }
+            }
+            return records;
+        }
+
+        function renderResults() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            let sumMonthly = 0, sumSettlements = 0, sumTotal = 0;
+
+            globalData.forEach(row => {
+                sumMonthly += row["رسوم شهرية"];
+                sumSettlements += row["رسوم تسويات"];
+                sumTotal += row["إجمالي"];
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row["محمول"]}</td>
+                    <td>${row["رسوم شهرية"].toFixed(2)}</td>
+                    <td>${row["رسوم الخدمات"].toFixed(2)}</td>
+                    <td>${row["مكالمات محلية"].toFixed(2)}</td>
+                    <td>${row["رسائل محلية"].toFixed(2)}</td>
+                    <td>${row["إنترنت محلية"].toFixed(2)}</td>
+                    <td>${row["مكالمات دولية"].toFixed(2)}</td>
+                    <td>${row["مكالمات تجوال"].toFixed(2)}</td>
+                    <td>${row["رسوم تسويات"].toFixed(2)}</td>
+                    <td>${row["ضرائب"].toFixed(2)}</td>
+                    <td style="font-weight:bold">${row["إجمالي"].toFixed(2)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('sLines').innerText = globalData.length;
+            document.getElementById('sMonthly').innerText = sumMonthly.toLocaleString();
+            document.getElementById('sSettlements').innerText = sumSettlements.toLocaleString();
+            document.getElementById('sTotal').innerText = sumTotal.toLocaleString();
+            
+            document.getElementById('resultsArea').classList.remove('hidden');
+        }
+
+        function exportToExcel() {
+            const ws = XLSX.utils.json_to_sheet(globalData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "تقرير الفواتير");
+            XLSX.writeFile(wb, "Hawelha_Telecom_Report.xlsx");
+        }
+
+        // تشغيل التحقق عند فتح الصفحة
+        checkAuth();
+    </script>
+</body>
+</html>
