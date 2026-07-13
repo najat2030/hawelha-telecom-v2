@@ -1,99 +1,397 @@
-def parse_file(file, is_arabic):
-    records = []
-    try:
-        file_bytes = file.read()
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hawelha Telecom - تحليل الفواتير</title>
+    
+    <!-- مكتبة SheetJS لتصدير Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- خط تجوال -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root { --primary: #1a7e43; --primary-dark: #146435; --bg: #f8f9fa; }
+        * { box-sizing: border-box; font-family: 'Tajawal', sans-serif; margin: 0; padding: 0; }
+        body { background-color: var(--bg); color: #333; min-height: 100vh; }
         
-        # نبدأ من الصفحة الثالثة كما هو معتاد في هذه الفواتير
-        for page_num in range(2, len(doc)):
-            page = doc[page_num]
-            tabs = page.find_tables()
-            
-            if not tabs: 
-                continue
+        /* تصميم شاشة تسجيل الدخول */
+        .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #F4F6F8; }
+        .login-card { background: rgba(255, 255, 255, 0.97); padding: 35px 30px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.08); max-width: 430px; width: 90%; text-align: center; }
+        .login-title { color: var(--primary); font-size: 26px; font-weight: 800; margin-bottom: 20px; }
+        
+        /* الحقول والأزرار */
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; outline: none; transition: 0.3s; }
+        input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26, 126, 67, 0.1); }
+        button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 50px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.3s; }
+        button:hover { background: var(--primary-dark); transform: translateY(-2px); }
+        
+        /* الواجهة الرئيسية */
+        .app-header { background: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .logo-area { font-size: 24px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        .user-badge { background: var(--primary); color: white; padding: 8px 20px; border-radius: 50px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 20px 40px; }
+        
+        /* منطقة الرفع */
+        .upload-zone { border: 2px dashed #ccc; border-radius: 20px; padding: 40px; text-align: center; background: white; transition: 0.3s; cursor: pointer; margin-bottom: 30px; }
+        .upload-zone:hover { border-color: var(--primary); background: #f0fdf4; }
+        .upload-icon { font-size: 40px; margin-bottom: 10px; color: var(--primary); }
+        
+        /* البطاقات الإحصائية */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-right: 5px solid var(--primary); text-align: center; }
+        .stat-val { font-size: 32px !important; color: var(--primary); font-weight: 800 !important; margin-top: 5px; }
+        .stat-label { font-size: 18px !important; color: #555; font-weight: 600 !important; }
+        
+        /* الجدول */
+        .table-container { overflow-x: auto; background: white; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 20px; }
+        table { width: 100%; border-collapse: collapse; min-width: 1000px; font-size: 14px; }
+        th { background: var(--primary); color: white; padding: 12px; text-align: right; font-weight: 700; position: sticky; top: 0; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        tr:nth-child(even) { background-color: #f9fdfa; }
+        tr:hover { background-color: #e8f5e9; }
+        
+        /* شريط التقدم */
+        .progress-bar { height: 6px; background: #eee; border-radius: 10px; overflow: hidden; margin: 20px 0; display: none; }
+        .progress-fill { height: 100%; background: #daa520; width: 0%; transition: width 0.3s; }
+        
+        .hidden { display: none !important; }
+        .error-msg { color: #dc3545; background: #ffe6e6; padding: 10px; border-radius: 8px; margin-bottom: 15px; display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- شاشة تسجيل الدخول -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-card">
+            <div class="login-title">🔐 تسجيل الدخول</div>
+            <div id="loginError" class="error-msg">بيانات خاطئة</div>
+            <input type="text" id="username" placeholder="اسم المستخدم">
+            <input type="password" id="password" placeholder="كلمة المرور">
+            <button onclick="handleLogin()">دخول</button>
+        </div>
+    </div>
+
+    <!-- الواجهة الرئيسية -->
+    <div id="mainApp" class="hidden">
+        <div class="app-header">
+            <div class="logo-area"> Hawelha Telecom</div>
+            <div class="user-badge">
+                <span id="displayUser">المستخدم</span>
+                <button onclick="logout()" style="width: auto; padding: 5px 15px; font-size: 12px; background: rgba(255,255,255,0.2);">خروج</button>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📂</div>
+                <h3>اضغط هنا لرفع ملفات PDF</h3>
+                <p style="color: #777;">يدعم رفع ملفات متعددة مع منع التكرار تلقائياً</p>
+                <input type="file" id="fileInput" multiple accept=".pdf" class="hidden" onchange="processFiles(this.files)">
+            </div>
+
+            <div id="progressArea" class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+            <div id="statusText" style="text-align: center; color: #666; margin-bottom: 20px;"></div>
+
+            <div id="resultsArea" class="hidden">
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label"> الخطوط</div><div id="sLines" class="stat-val">0</div></div>
+                    <div class="stat-card"><div class="stat-label">💰 الرسوم الشهرية</div><div id="sMonthly" class="stat-val">0</div></div>
+                    <div class="stat-card"><div class="stat-label">🧾 التسويات</div><div id="sSettlements" class="stat-val" style="color: red;">0</div></div>
+                    <div class="stat-card"><div class="stat-label">🏛️ الضرائب</div><div id="sTaxes" class="stat-val">0</div></div>
+                    <div class="stat-card"><div class="stat-label">💎 الإجمالي الكلي</div><div id="sTotal" class="stat-val">0</div></div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">تفاصيل البيانات المستخرجة</h3>
+                    <button onclick="exportToExcel()" style="width: auto; padding: 10px 25px;"> تحميل Excel</button>
+                </div>
                 
-            for table in tabs:
-                extracted_rows = table.extract()
-                if not extracted_rows: 
-                    continue
-                    
-                # نمر على الصفوف للبحث عن سطر يحتوي على "محمول" ورقم هاتف
-                for i, row in enumerate(extracted_rows):
-                    if not row: 
-                        continue
-                        
-                    # تحويل الصف لنص للبحث عنه
-                    row_text = " ".join([str(c) for c in row if c])
-                    
-                    # البحث عن نمط "محمول" متبوع برقم هاتف
-                    phone_match = re.search(r'محمول\s*(01[0125]\d{8})', row_text)
-                    
-                    if phone_match:
-                        p = phone_match.group(1)
-                        
-                        # التحقق من وجود سطر بيانات مالي بعده
-                        if i + 1 < len(extracted_rows):
-                            next_row = extracted_rows[i+1]
-                            
-                            # استخراج الأرقام من سطر البيانات المالي
-                            # نقوم بتنظيف الخلايا وتحويلها لأرقام
-                            financial_vals = []
-                            for cell in next_row:
-                                if cell:
-                                    try:
-                                        # تنظيف النص من أي رموز غير رقمية ما عدا النقطة والناقص
-                                        clean_val = str(cell).replace(',', '').strip()
-                                        if re.match(r'^-?\d+(\.\d+)?$', clean_val):
-                                            financial_vals.append(float(clean_val))
-                                    except:
-                                        pass
-                            
-                            # الآن لدينا قائمة بالأرقام المالية بالترتيب
-                            # بناءً على الصورة، الترتيب المتوقع هو:
-                            # [رسوم شهرية, خدمات, محلي..., دولي..., تجوال..., تسويات, ضرائب, إجمالي]
-                            # لكن قد تختلف عدد الأصفار، لذا نعتمد على المواقع الثابتة للأعمدة المهمة
-                            
-                            # في العادة: 
-                            # index 0: رسوم شهرية
-                            # ... (أصفار أو قيم استهلاك) ...
-                            # index -2: الضرائب
-                            # index -1: الإجمالي
-                            
-                            if len(financial_vals) >= 2: 
-                                # تحديد القيم بناءً على مواقعها النسبية
-                                monthly_fee = financial_vals[0] if len(financial_vals) > 0 else 0
-                                taxes = financial_vals[-2] if len(financial_vals) >= 2 else 0
-                                total = financial_vals[-1] if len(financial_vals) >= 1 else 0
-                                
-                                # محاولة استخراج باقي القيم إذا كانت موجودة بشكل واضح
-                                # نفترض أن الأعمدة الوسطى (استهلاك) تبدأ من index 1
-                                # لكن لضمان الدقة، سنضع الأصفار كقيمة افتراضية للأعمدة التي قد تكون فارغة في النص
-                                
-                                record = {
-                                    "محمول": p,
-                                    "رسوم شهرية": monthly_fee,
-                                    "رسوم الخدمات": financial_vals[1] if len(financial_vals) > 1 else 0,
-                                    "مكالمات محلية": 0, # يتم تحديدها بدقة إذا كان هناك تمييز في الخلايا
-                                    "رسائل محلية": 0,
-                                    "إنترنت محلية": 0,
-                                    "مكالمات دولية": 0,
-                                    "رسائل دولية": 0,
-                                    "مكالمات تجوال": 0,
-                                    "رسائل تجوال": 0,
-                                    "إنترنت تجوال": 0,
-                                    "رسوم تسويات": 0,
-                                    "ضرائب": taxes,
-                                    "إجمالي": total
-                                }
-                                
-                                # تحسين: إذا كان عدد القيم أكبر، نحاول توزيعها
-                                # لكن safest way هو الاعتماد على الأول والأخير والثاني قبل الأخير
-                                # لأن الأعمدة الوسطى غالباً ما تكون مدمجة أو أصفار في هذا النوع من الفواتير
-                                
-                                records.append(record)
-                                
-        doc.close()
-    except Exception as e:
-        st.error(f"حدث خطأ أثناء معالجة الملف: {str(e)}")
+                <div class="table-container">
+                    <table id="dataTable">
+                        <thead>
+                            <tr>
+                                <th>رقم المحمول</th>
+                                <th>رسوم شهرية</th>
+                                <th>خدمات</th>
+                                <th>محلي مكالمات</th>
+                                <th>محلي رسائل</th>
+                                <th>محلي إنترنت</th>
+                                <th>دولي مكالمات</th>
+                                <th>دولي رسائل</th>
+                                <th>تجوال مكالمات</th>
+                                <th>تجوال رسائل</th>
+                                <th>تجوال إنترنت</th>
+                                <th>تسويات</th>
+                                <th>ضرائب</th>
+                                <th>الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ================= إعدادات المستخدمين =================
+        const USERS_DB = {
+            "admin": "123",
+            "user1": "pass1",
+            "manager": "hawelha2024"
+        };
+
+        let globalData = [];
+        // فلتر لمنع تكرار الأرقام (السر في حل مشكلة التكرار)
+        const processedPhones = new Set(); 
+
+        // ================= دوال تسجيل الدخول =================
+        function handleLogin() {
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value.trim();
+            
+            if (USERS_DB[u] && USERS_DB[u] === p) {
+                sessionStorage.setItem('isLoggedIn', 'true');
+                sessionStorage.setItem('username', u);
+                showApp();
+            } else {
+                const err = document.getElementById('loginError');
+                err.style.display = 'block';
+                setTimeout(() => err.style.display = 'none', 3000);
+            }
+        }
+
+        function checkAuth() {
+            if (sessionStorage.getItem('isLoggedIn') === 'true') {
+                showApp();
+            }
+        }
+
+        function showApp() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('displayUser').innerText = sessionStorage.getItem('username');
+        }
+
+        function logout() {
+            sessionStorage.clear();
+            location.reload();
+        }
+
+        // ================= منطق استخراج البيانات =================
         
-    return records
+        function extractNumbers(text) {
+            if (!text) return [];
+            let normalized = text.replace(/−/g, "-").replace(/–/g, "-").replace(/—/g, "-");
+            normalized = normalized.replace(/\((\d+\.?\d*)\)/g, '-$1');
+            normalized = normalized.replace(/(\d+\.?\d*)-/g, '-$1');
+            normalized = normalized.replace(/-\s+(\d)/g, '-$1');
+            
+            const matches = normalized.match(/-?\d+(?:\.\d+)?/g);
+            return matches ? matches.map(n => parseFloat(n)) : [];
+        }
+
+        function buildRecord(vals, phone) {
+            const g = (idx) => idx < vals.length ? vals[idx] : 0;
+            return {
+                "محمول": phone,
+                "رسوم شهرية": g(0), "رسوم الخدمات": g(1),
+                "مكالمات محلية": g(2), "رسائل محلية": g(3),
+                "إنترنت محلية": g(4), "مكالمات دولية": g(5),
+                "رسائل دولية": g(6), "مكالمات تجوال": g(7),
+                "رسائل تجوال": g(8), "إنترنت تجوال": g(9),
+                "رسوم تسويات": g(10), "ضرائب": g(11), "إجمالي": g(12)
+            };
+        }
+
+        function scoreRecord(rec) {
+            let score = 0;
+            const totalCalc = rec["رسوم شهرية"] + rec["رسوم الخدمات"] + rec["مكالمات محلية"] + 
+                              rec["رسائل محلية"] + rec["إنترنت محلية"] + rec["مكالمات دولية"] + 
+                              rec["رسائل دولية"] + rec["مكالمات تجوال"] + rec["رسائل تجوال"] + 
+                              rec["إنترنت تجوال"] + rec["رسوم تسويات"] + rec["ضرائب"];
+            
+            const diff = Math.abs(rec["إجمالي"] - totalCalc);
+            
+            if (diff <= 0.05) score += 1000;
+            else if (diff <= 0.10) score += 500;
+            else if (diff <= 0.50) score += 250;
+            else if (diff <= 1) score += 100;
+            else if (diff <= 3) score += 30;
+            else if (diff <= 10) score += 10;
+
+            if (rec["رسوم شهرية"] >= 0) score += 10;
+            if (rec["ضرائب"] >= 0) score += 10;
+            if (rec["رسوم الخدمات"] >= 0) score += 5;
+            if (Math.abs(rec["إجمالي"]) >= Math.abs(rec["ضرائب"])) score += 5;
+            if (Math.abs(rec["إجمالي"]) >= Math.abs(rec["رسوم شهرية"])) score += 5;
+            if (Math.abs(rec["مكالمات محلية"]) <= 100) score += 3;
+            if (Math.abs(rec["رسائل محلية"]) <= 100) score += 3;
+            if (Math.abs(rec["إنترنت محلية"]) <= 100) score += 3;
+
+            return score;
+        }
+
+        async function processFiles(files) {
+            if (!files.length) return;
+            
+            const progressArea = document.getElementById('progressArea');
+            const progressFill = document.getElementById('progressFill');
+            const statusText = document.getElementById('statusText');
+            
+            progressArea.style.display = 'block';
+            document.getElementById('resultsArea').classList.add('hidden');
+            globalData = [];
+            processedPhones.clear(); // تفريغ الفلتر عند بدء معالجة جديدة
+            
+            if (typeof pdfjsLib === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                document.head.appendChild(script);
+                await new Promise(resolve => script.onload = resolve);
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
+
+            for (let i = 0; i < files.length; i++) {
+                statusText.innerText = `جاري معالجة الملف ${i + 1} من ${files.length}...`;
+                progressFill.style.width = `${((i) / files.length) * 100}%`;
+                
+                try {
+                    const records = await extractFromPDF(files[i]);
+                    globalData = globalData.concat(records);
+                } catch (err) {
+                    console.error("Error processing file:", files[i].name, err);
+                }
+            }
+            
+            progressFill.style.width = '100%';
+            statusText.innerText = `تمت المعالجة بنجاح! تم استخراج ${globalData.length} خط فريد ✅`;
+            renderResults();
+        }
+
+        async function extractFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            let records = [];
+
+            // نبدأ من الصفحة الثالثة كما في كود بايثون الأصلي
+            for (let pageNum = 2; pageNum < pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                
+                // تجميع النص من العناصر
+                let fullText = textContent.items.map(item => item.str).join(' ');
+                
+                // تحويل الأرقام العربية إلى إنجليزية
+                function normalizeDigits(str) {
+                    return str
+                        .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
+                        .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+                }
+
+                const normalizedText = normalizeDigits(fullText);
+
+                // استخراج أرقام المحمول الموجودة بجوار كلمة "محمول" فقط
+                const phoneRegex = /محمول[\s\S]{0,40}?(01[0125]\d{8})/g;
+                let phones = [];
+                let match;
+                while ((match = phoneRegex.exec(normalizedText)) !== null) {
+                    phones.push(match[1]);
+                }
+                
+                for (const phone of phones) {
+                    // 🔑 الفلتر الذكي: إذا كان الرقم موجود مسبقاً، تخطاه فوراً
+                    if (processedPhones.has(phone)) continue;
+                    
+                    const idx = normalizedText.indexOf(phone);
+                    const context = normalizedText.substring(Math.max(0, idx - 50), idx + 300);
+                    
+                    let vals = extractNumbers(context);
+                    
+                    const phoneNum = parseInt(phone);
+                    vals = vals.filter(v => {
+                        const vInt = parseInt(v);
+                        return !(vInt === phoneNum || String(vInt) === phone);
+                    });
+
+                    if (vals.length < 13) continue;
+
+                    let candidates = [];
+                    for (let start = 0; start <= vals.length - 13; start++) {
+                        const window = vals.slice(start, start + 13);
+                        
+                        const normalRec = buildRecord(window, phone);
+                        const reversedWindow = [...window].reverse();
+                        const reversedRec = buildRecord(reversedWindow, phone);
+
+                        candidates.push({ score: scoreRecord(normalRec), record: normalRec });
+                        candidates.push({ score: scoreRecord(reversedRec), record: reversedRec });
+                    }
+
+                    candidates.sort((a, b) => b.score - a.score);
+                    if (candidates.length > 0 && candidates[0].score > 0) {
+                        // إضافة الرقم للفلتر بعد التأكد من صحة بياناته
+                        processedPhones.add(phone);
+                        records.push(candidates[0].record);
+                    }
+                }
+            }
+            return records;
+        }
+
+        function renderResults() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            let sumMonthly = 0, sumSettlements = 0, sumTaxes = 0, sumTotal = 0;
+
+            globalData.forEach(row => {
+                sumMonthly += row["رسوم شهرية"];
+                sumSettlements += row["رسوم تسويات"];
+                sumTaxes += row["ضرائب"];
+                sumTotal += row["إجمالي"];
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row["محمول"]}</td>
+                    <td>${row["رسوم شهرية"].toFixed(2)}</td>
+                    <td>${row["رسوم الخدمات"].toFixed(2)}</td>
+                    <td>${row["مكالمات محلية"].toFixed(2)}</td>
+                    <td>${row["رسائل محلية"].toFixed(2)}</td>
+                    <td>${row["إنترنت محلية"].toFixed(2)}</td>
+                    <td>${row["مكالمات دولية"].toFixed(2)}</td>
+                    <td>${row["رسائل دولية"].toFixed(2)}</td>
+                    <td>${row["مكالمات تجوال"].toFixed(2)}</td>
+                    <td>${row["رسائل تجوال"].toFixed(2)}</td>
+                    <td>${row["إنترنت تجوال"].toFixed(2)}</td>
+                    <td>${row["رسوم تسويات"].toFixed(2)}</td>
+                    <td>${row["ضرائب"].toFixed(2)}</td>
+                    <td style="font-weight:bold">${row["إجمالي"].toFixed(2)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('sLines').innerText = globalData.length.toLocaleString();
+            document.getElementById('sMonthly').innerText = sumMonthly.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+            document.getElementById('sSettlements').innerText = sumSettlements.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+            document.getElementById('sTaxes').innerText = sumTaxes.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+            document.getElementById('sTotal').innerText = sumTotal.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+            
+            document.getElementById('resultsArea').classList.remove('hidden');
+        }
+
+        function exportToExcel() {
+            const ws = XLSX.utils.json_to_sheet(globalData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "تقرير الفواتير");
+            XLSX.writeFile(wb, `Hawelha_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        // تشغيل التحقق عند فتح الصفحة
+        checkAuth();
+    </script>
+</body>
+</html>
