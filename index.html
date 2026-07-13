@@ -5,22 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hawelha Telecom - تحليل الفواتير</title>
     
-    <!-- مكتبات خارجية للتعامل مع PDF و Excel -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <!-- مكتبة SheetJS لتصدير Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     
     <!-- خط تجوال -->
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
 
     <style>
         :root { --primary: #1a7e43; --primary-dark: #146435; --bg: #f8f9fa; }
-        * { box-sizing: border-box; font-family: 'Tajawal', sans-serif; }
-        body { margin: 0; background-color: var(--bg); color: #333; padding-bottom: 50px; }
+        * { box-sizing: border-box; font-family: 'Tajawal', sans-serif; margin: 0; padding: 0; }
+        body { background-color: var(--bg); color: #333; min-height: 100vh; }
         
         /* تصميم شاشة تسجيل الدخول */
-        .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .login-card { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
-        .login-title { color: var(--primary); font-size: 28px; font-weight: 800; margin-bottom: 30px; }
+        .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #F4F6F8; }
+        .login-card { background: rgba(255, 255, 255, 0.97); padding: 35px 30px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.08); max-width: 430px; width: 90%; text-align: center; }
+        .login-title { color: var(--primary); font-size: 26px; font-weight: 800; margin-bottom: 20px; }
         
         /* الحقول والأزرار */
         input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; outline: none; transition: 0.3s; }
@@ -29,11 +28,11 @@
         button:hover { background: var(--primary-dark); transform: translateY(-2px); }
         
         /* الواجهة الرئيسية */
-        .app-header { background: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 30px; }
+        .app-header { background: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .logo-area { font-size: 24px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 10px; }
         .user-badge { background: var(--primary); color: white; padding: 8px 20px; border-radius: 50px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
         
-        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 20px 40px; }
         
         /* منطقة الرفع */
         .upload-zone { border: 2px dashed #ccc; border-radius: 20px; padding: 40px; text-align: center; background: white; transition: 0.3s; cursor: pointer; margin-bottom: 30px; }
@@ -42,20 +41,21 @@
         
         /* البطاقات الإحصائية */
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .stat-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-right: 5px solid var(--primary); text-align: center; }
-        .stat-val { font-size: 28px; font-weight: 800; color: var(--primary); margin-top: 5px; }
-        .stat-label { color: #666; font-size: 14px; font-weight: 600; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-right: 5px solid var(--primary); text-align: center; }
+        .stat-val { font-size: 32px !important; color: var(--primary); font-weight: 800 !important; margin-top: 5px; }
+        .stat-label { font-size: 18px !important; color: #555; font-weight: 600 !important; }
         
         /* الجدول */
         .table-container { overflow-x: auto; background: white; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 20px; }
-        table { width: 100%; border-collapse: collapse; min-width: 800px; }
-        th { background: var(--primary); color: white; padding: 12px; text-align: right; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; min-width: 1000px; font-size: 14px; }
+        th { background: var(--primary); color: white; padding: 12px; text-align: right; font-weight: 700; position: sticky; top: 0; }
         td { padding: 12px; border-bottom: 1px solid #eee; }
-        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) { background-color: #f9fdfa; }
+        tr:hover { background-color: #e8f5e9; }
         
         /* شريط التقدم */
         .progress-bar { height: 6px; background: #eee; border-radius: 10px; overflow: hidden; margin: 20px 0; display: none; }
-        .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s; }
+        .progress-fill { height: 100%; background: #daa520; width: 0%; transition: width 0.3s; }
         
         .hidden { display: none !important; }
         .error-msg { color: #dc3545; background: #ffe6e6; padding: 10px; border-radius: 8px; margin-bottom: 15px; display: none; }
@@ -77,7 +77,7 @@
     <!-- الواجهة الرئيسية -->
     <div id="mainApp" class="hidden">
         <div class="app-header">
-            <div class="logo-area">📊 Hawelha Telecom</div>
+            <div class="logo-area"> Hawelha Telecom</div>
             <div class="user-badge">
                 <span id="displayUser">المستخدم</span>
                 <button onclick="logout()" style="width: auto; padding: 5px 15px; font-size: 12px; background: rgba(255,255,255,0.2);">خروج</button>
@@ -88,7 +88,7 @@
             <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
                 <div class="upload-icon">📂</div>
                 <h3>اضغط هنا لرفع ملفات PDF</h3>
-                <p style="color: #777;">يدعم رفع ملفات متعددة (بحد أقصى 100 ميجا)</p>
+                <p style="color: #777;">يدعم رفع ملفات متعددة</p>
                 <input type="file" id="fileInput" multiple accept=".pdf" class="hidden" onchange="processFiles(this.files)">
             </div>
 
@@ -99,13 +99,14 @@
                 <div class="stats-grid">
                     <div class="stat-card"><div class="stat-label"> الخطوط</div><div id="sLines" class="stat-val">0</div></div>
                     <div class="stat-card"><div class="stat-label">💰 الرسوم الشهرية</div><div id="sMonthly" class="stat-val">0</div></div>
-                    <div class="stat-card"><div class="stat-label">🧾 التسويات</div><div id="sSettlements" class="stat-val" style="color: #dc3545;">0</div></div>
+                    <div class="stat-card"><div class="stat-label">🧾 التسويات</div><div id="sSettlements" class="stat-val" style="color: red;">0</div></div>
+                    <div class="stat-card"><div class="stat-label">🏛️ الضرائب</div><div id="sTaxes" class="stat-val">0</div></div>
                     <div class="stat-card"><div class="stat-label">💎 الإجمالي الكلي</div><div id="sTotal" class="stat-val">0</div></div>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 style="margin: 0;">تفاصيل البيانات المستخرجة</h3>
-                    <button onclick="exportToExcel()" style="width: auto; padding: 10px 25px;">📥 تحميل Excel</button>
+                    <button onclick="exportToExcel()" style="width: auto; padding: 10px 25px;"> تحميل Excel</button>
                 </div>
                 
                 <div class="table-container">
@@ -119,7 +120,10 @@
                                 <th>محلي رسائل</th>
                                 <th>محلي إنترنت</th>
                                 <th>دولي مكالمات</th>
+                                <th>دولي رسائل</th>
                                 <th>تجوال مكالمات</th>
+                                <th>تجوال رسائل</th>
+                                <th>تجوال إنترنت</th>
                                 <th>تسويات</th>
                                 <th>ضرائب</th>
                                 <th>الإجمالي</th>
@@ -133,8 +137,7 @@
     </div>
 
     <script>
-        // ================= إعدادات المستخدمين (نفس ملف users.xlsx) =================
-        // يمكنك إضافة المزيد من المستخدمين هنا يدوياً
+        // ================= إعدادات المستخدمين =================
         const USERS_DB = {
             "admin": "123",
             "user1": "pass1",
@@ -176,8 +179,63 @@
             location.reload();
         }
 
-        // ================= منطق معالجة PDF =================
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        // ================= منطق استخراج البيانات (نفس خوارزمية Python) =================
+        
+        // دالة تطبيع النصوص واستخراج الأرقام
+        function extractNumbers(text) {
+            if (!text) return [];
+            let normalized = text.replace(/−/g, "-").replace(/–/g, "-").replace(/—/g, "-");
+            // معالجة الأقواس والأرقام السالبة كما في كود بايثون
+            normalized = normalized.replace(/\((\d+\.?\d*)\)/g, '-$1');
+            normalized = normalized.replace(/(\d+\.?\d*)-/g, '-$1');
+            normalized = normalized.replace(/-\s+(\d)/g, '-$1');
+            
+            const matches = normalized.match(/-?\d+(?:\.\d+)?/g);
+            return matches ? matches.map(n => parseFloat(n)) : [];
+        }
+
+        // دالة بناء السجل
+        function buildRecord(vals, phone) {
+            const g = (idx) => idx < vals.length ? vals[idx] : 0;
+            return {
+                "محمول": phone,
+                "رسوم شهرية": g(0), "رسوم الخدمات": g(1),
+                "مكالمات محلية": g(2), "رسائل محلية": g(3),
+                "إنترنت محلية": g(4), "مكالمات دولية": g(5),
+                "رسائل دولية": g(6), "مكالمات تجوال": g(7),
+                "رسائل تجوال": g(8), "إنترنت تجوال": g(9),
+                "رسوم تسويات": g(10), "ضرائب": g(11), "إجمالي": g(12)
+            };
+        }
+
+        // دالة التقييم (Scoring Algorithm) - نفس منطق بايثون بالضبط
+        function scoreRecord(rec) {
+            let score = 0;
+            const totalCalc = rec["رسوم شهرية"] + rec["رسوم الخدمات"] + rec["مكالمات محلية"] + 
+                              rec["رسائل محلية"] + rec["إنترنت محلية"] + rec["مكالمات دولية"] + 
+                              rec["رسائل دولية"] + rec["مكالمات تجوال"] + rec["رسائل تجوال"] + 
+                              rec["إنترنت تجوال"] + rec["رسوم تسويات"] + rec["ضرائب"];
+            
+            const diff = Math.abs(rec["إجمالي"] - totalCalc);
+            
+            if (diff <= 0.05) score += 1000;
+            else if (diff <= 0.10) score += 500;
+            else if (diff <= 0.50) score += 250;
+            else if (diff <= 1) score += 100;
+            else if (diff <= 3) score += 30;
+            else if (diff <= 10) score += 10;
+
+            if (rec["رسوم شهرية"] >= 0) score += 10;
+            if (rec["ضرائب"] >= 0) score += 10;
+            if (rec["رسوم الخدمات"] >= 0) score += 5;
+            if (Math.abs(rec["إجمالي"]) >= Math.abs(rec["ضرائب"])) score += 5;
+            if (Math.abs(rec["إجمالي"]) >= Math.abs(rec["رسوم شهرية"])) score += 5;
+            if (Math.abs(rec["مكالمات محلية"]) <= 100) score += 3;
+            if (Math.abs(rec["رسائل محلية"]) <= 100) score += 3;
+            if (Math.abs(rec["إنترنت محلية"]) <= 100) score += 3;
+
+            return score;
+        }
 
         async function processFiles(files) {
             if (!files.length) return;
@@ -190,6 +248,15 @@
             document.getElementById('resultsArea').classList.add('hidden');
             globalData = [];
             
+            // تحميل مكتبة PDF.js ديناميكياً إذا لم تكن محملة
+            if (typeof pdfjsLib === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                document.head.appendChild(script);
+                await new Promise(resolve => script.onload = resolve);
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
+
             for (let i = 0; i < files.length; i++) {
                 statusText.innerText = `جاري معالجة الملف ${i + 1} من ${files.length}...`;
                 progressFill.style.width = `${((i) / files.length) * 100}%`;
@@ -213,7 +280,7 @@
             let records = [];
 
             // نبدأ من الصفحة الثالثة كما في كود بايثون الأصلي
-            for (let pageNum = 3; pageNum <= pdf.numPages; pageNum++) {
+            for (let pageNum = 2; pageNum < pdf.numPages; pageNum++) {
                 const page = await pdf.getPage(pageNum);
                 const textContent = await page.getTextContent();
                 
@@ -222,32 +289,42 @@
                 
                 // البحث عن أرقام الهواتف (010, 011, 012, 015)
                 const phoneRegex = /01[0125]\d{8}/g;
-                const phones = fullText.match(phoneRegex);
+                const phones = [...fullText.matchAll(phoneRegex)].map(m => m[0]);
                 
-                if (phones) {
-                    phones.forEach(phone => {
-                        // استخراج الأرقام المجاورة للهاتف كمحاولة لتخمين القيم
-                        // هذه محاكاة بسيطة لأن JS لا يملك قدرة pdfplumber على فهم الجداول
-                        const nearbyNumbers = fullText.match(/-?\d+(\.\d+)?/g) || [];
-                        
-                        // نقوم بإنشاء سجل افتراضي (يجب تعديله حسب شكل الفاتورة الفعلي)
-                        records.push({
-                            "محمول": phone,
-                            "رسوم شهرية": parseFloat(nearbyNumbers[0]) || 0,
-                            "رسوم الخدمات": parseFloat(nearbyNumbers[1]) || 0,
-                            "مكالمات محلية": parseFloat(nearbyNumbers[2]) || 0,
-                            "رسائل محلية": parseFloat(nearbyNumbers[3]) || 0,
-                            "إنترنت محلية": parseFloat(nearbyNumbers[4]) || 0,
-                            "مكالمات دولية": parseFloat(nearbyNumbers[5]) || 0,
-                            "رسائل دولية": 0,
-                            "مكالمات تجوال": parseFloat(nearbyNumbers[6]) || 0,
-                            "رسائل تجوال": 0,
-                            "إنترنت تجوال": 0,
-                            "رسوم تسويات": parseFloat(nearbyNumbers[7]) || 0,
-                            "ضرائب": parseFloat(nearbyNumbers[8]) || 0,
-                            "إجمالي": parseFloat(nearbyNumbers[9]) || 0
-                        });
+                for (const phone of phones) {
+                    // نجد موقع الهاتف ونأخذ جزء من النص حوله لاستخراج الأرقام المجاورة
+                    const idx = fullText.indexOf(phone);
+                    const context = fullText.substring(Math.max(0, idx - 50), idx + 300);
+                    
+                    let vals = extractNumbers(context);
+                    
+                    // استبعاد رقم الهاتف نفسه من قائمة القيم الرقمية
+                    const phoneNum = parseInt(phone);
+                    vals = vals.filter(v => {
+                        const vInt = parseInt(v);
+                        return !(vInt === phoneNum || String(vInt) === phone);
                     });
+
+                    if (vals.length < 13) continue;
+
+                    // تطبيق خوارزمية التقييم (Scoring) على النوافذ المنزلقة
+                    let candidates = [];
+                    for (let start = 0; start <= vals.length - 13; start++) {
+                        const window = vals.slice(start, start + 13);
+                        
+                        const normalRec = buildRecord(window, phone);
+                        const reversedWindow = [...window].reverse();
+                        const reversedRec = buildRecord(reversedWindow, phone);
+
+                        candidates.push({ score: scoreRecord(normalRec), record: normalRec });
+                        candidates.push({ score: scoreRecord(reversedRec), record: reversedRec });
+                    }
+
+                    // اختيار أفضل سجل بناءً على أعلى سكور
+                    candidates.sort((a, b) => b.score - a.score);
+                    if (candidates.length > 0 && candidates[0].score > 0) {
+                        records.push(candidates[0].record);
+                    }
                 }
             }
             return records;
@@ -257,11 +334,12 @@
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
             
-            let sumMonthly = 0, sumSettlements = 0, sumTotal = 0;
+            let sumMonthly = 0, sumSettlements = 0, sumTaxes = 0, sumTotal = 0;
 
             globalData.forEach(row => {
                 sumMonthly += row["رسوم شهرية"];
                 sumSettlements += row["رسوم تسويات"];
+                sumTaxes += row["ضرائب"];
                 sumTotal += row["إجمالي"];
                 
                 const tr = document.createElement('tr');
@@ -273,7 +351,10 @@
                     <td>${row["رسائل محلية"].toFixed(2)}</td>
                     <td>${row["إنترنت محلية"].toFixed(2)}</td>
                     <td>${row["مكالمات دولية"].toFixed(2)}</td>
+                    <td>${row["رسائل دولية"].toFixed(2)}</td>
                     <td>${row["مكالمات تجوال"].toFixed(2)}</td>
+                    <td>${row["رسائل تجوال"].toFixed(2)}</td>
+                    <td>${row["إنترنت تجوال"].toFixed(2)}</td>
                     <td>${row["رسوم تسويات"].toFixed(2)}</td>
                     <td>${row["ضرائب"].toFixed(2)}</td>
                     <td style="font-weight:bold">${row["إجمالي"].toFixed(2)}</td>
@@ -281,10 +362,11 @@
                 tbody.appendChild(tr);
             });
 
-            document.getElementById('sLines').innerText = globalData.length;
-            document.getElementById('sMonthly').innerText = sumMonthly.toLocaleString();
-            document.getElementById('sSettlements').innerText = sumSettlements.toLocaleString();
-            document.getElementById('sTotal').innerText = sumTotal.toLocaleString();
+            document.getElementById('sLines').innerText = globalData.length.toLocaleString();
+            document.getElementById('sMonthly').innerText = sumMonthly.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+            document.getElementById('sSettlements').innerText = sumSettlements.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+            document.getElementById('sTaxes').innerText = sumTaxes.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+            document.getElementById('sTotal').innerText = sumTotal.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
             
             document.getElementById('resultsArea').classList.remove('hidden');
         }
@@ -293,7 +375,7 @@
             const ws = XLSX.utils.json_to_sheet(globalData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "تقرير الفواتير");
-            XLSX.writeFile(wb, "Hawelha_Telecom_Report.xlsx");
+            XLSX.writeFile(wb, `Hawelha_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
         }
 
         // تشغيل التحقق عند فتح الصفحة
